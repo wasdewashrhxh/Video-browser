@@ -1,27 +1,30 @@
 const state = {
-  folders: [
-    { id: 'all', name: 'All Media' },
-    { id: 'uncategorized', name: 'Uncategorized' },
-  ],
+  folders: [],
   activeFolderId: 'all',
   mediaItems: [],
+  libraryPath: '',
 };
 
-const mediaInput = document.getElementById('mediaInput');
 const folderList = document.getElementById('folderList');
 const mediaGrid = document.getElementById('mediaGrid');
 const createFolderBtn = document.getElementById('createFolderBtn');
+const importBtn = document.getElementById('importBtn');
+const refreshBtn = document.getElementById('refreshBtn');
+const openLibraryBtn = document.getElementById('openLibraryBtn');
 const activeFolderTitle = document.getElementById('activeFolderTitle');
 const playerWrapper = document.getElementById('playerWrapper');
 const nowPlaying = document.getElementById('nowPlaying');
+const libraryPathLabel = document.getElementById('libraryPathLabel');
 const folderModal = document.getElementById('folderModal');
 const folderForm = document.getElementById('folderForm');
 const folderNameInput = document.getElementById('folderNameInput');
 const folderFormError = document.getElementById('folderFormError');
 const cancelFolderBtn = document.getElementById('cancelFolderBtn');
 
-mediaInput.addEventListener('change', importFiles);
 createFolderBtn.addEventListener('click', showCreateFolderModal);
+importBtn.addEventListener('click', importMedia);
+refreshBtn.addEventListener('click', loadLibrary);
+openLibraryBtn.addEventListener('click', () => window.libraryApi.openLibraryFolder());
 folderForm.addEventListener('submit', onFolderFormSubmit);
 cancelFolderBtn.addEventListener('click', closeFolderModal);
 folderModal.addEventListener('click', (event) => {
@@ -35,6 +38,20 @@ window.addEventListener('keydown', (event) => {
     closeFolderModal();
   }
 });
+
+async function loadLibrary() {
+  const data = await window.libraryApi.scan();
+  state.folders = data.folders;
+  state.mediaItems = data.mediaItems;
+  state.libraryPath = data.libraryPath;
+
+  if (!state.folders.some((folder) => folder.id === state.activeFolderId)) {
+    state.activeFolderId = 'all';
+  }
+
+  libraryPathLabel.textContent = `Library folder: ${state.libraryPath}`;
+  render();
+}
 
 function showCreateFolderModal() {
   folderForm.reset();
@@ -52,7 +69,7 @@ function closeFolderModal() {
   folderModal.setAttribute('aria-hidden', 'true');
 }
 
-function onFolderFormSubmit(event) {
+async function onFolderFormSubmit(event) {
   event.preventDefault();
   const name = folderNameInput.value.trim();
 
@@ -67,8 +84,9 @@ function onFolderFormSubmit(event) {
     return;
   }
 
-  addFolder(name);
+  await window.libraryApi.createFolder(name);
   closeFolderModal();
+  await loadLibrary();
 }
 
 function setFolderError(message) {
@@ -76,30 +94,10 @@ function setFolderError(message) {
   folderFormError.hidden = !message;
 }
 
-function addFolder(name) {
-  state.folders.push({
-    id: crypto.randomUUID(),
-    name,
-  });
-  render();
-}
-
-function importFiles(event) {
-  const files = [...event.target.files];
-  const validFiles = files.filter((file) => file.type.startsWith('video/') || file.type.startsWith('audio/'));
-
-  validFiles.forEach((file) => {
-    state.mediaItems.push({
-      id: crypto.randomUUID(),
-      name: file.name,
-      type: file.type,
-      objectUrl: URL.createObjectURL(file),
-      folderId: 'uncategorized',
-    });
-  });
-
-  mediaInput.value = '';
-  render();
+async function importMedia() {
+  const target = state.activeFolderId === 'all' ? 'Uncategorized' : state.activeFolderId;
+  await window.libraryApi.importMedia(target);
+  await loadLibrary();
 }
 
 function selectFolder(folderId) {
@@ -126,7 +124,7 @@ function openPlayer(itemId) {
 
   const media = document.createElement(isVideo ? 'video' : 'audio');
   media.controls = true;
-  media.src = selected.objectUrl;
+  media.src = selected.url;
   if (isVideo) {
     media.playsInline = true;
   }
@@ -135,14 +133,25 @@ function openPlayer(itemId) {
   nowPlaying.textContent = `Now playing: ${selected.name}`;
 }
 
-function moveToFolder(mediaId, folderId) {
-  const item = state.mediaItems.find((entry) => entry.id === mediaId);
-  if (!item) {
+async function moveToFolder(mediaId, folderId) {
+  await window.libraryApi.moveMedia(mediaId, folderId);
+  await loadLibrary();
+}
+
+async function deleteFolder(folderId) {
+  if (!window.confirm(`Delete folder "${folderId}" and all files in it?`)) {
     return;
   }
+  await window.libraryApi.deleteFolder(folderId);
+  if (state.activeFolderId === folderId) {
+    state.activeFolderId = 'all';
+  }
+  await loadLibrary();
+}
 
-  item.folderId = folderId;
-  render();
+async function deleteMedia(mediaId) {
+  await window.libraryApi.deleteMedia(mediaId);
+  await loadLibrary();
 }
 
 function renderFolders() {
@@ -154,6 +163,9 @@ function renderFolders() {
       li.classList.add('active');
     }
 
+    const row = document.createElement('div');
+    row.className = 'folder-row';
+
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'folder-select';
@@ -163,25 +175,32 @@ function renderFolders() {
     button.textContent = `${folder.name} (${folderCount})`;
     button.addEventListener('click', () => selectFolder(folder.id));
 
+    row.appendChild(button);
+
+    if (!['all', 'Uncategorized'].includes(folder.id)) {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'danger-btn';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.addEventListener('click', () => deleteFolder(folder.id));
+      row.appendChild(deleteBtn);
+    }
+
     if (folder.id !== 'all') {
       li.addEventListener('dragover', (event) => {
         event.preventDefault();
         li.classList.add('drag-over');
       });
-
-      li.addEventListener('dragleave', () => {
-        li.classList.remove('drag-over');
-      });
-
-      li.addEventListener('drop', (event) => {
+      li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
+      li.addEventListener('drop', async (event) => {
         event.preventDefault();
         const mediaId = event.dataTransfer.getData('text/plain');
         li.classList.remove('drag-over');
-        moveToFolder(mediaId, folder.id);
+        await moveToFolder(mediaId, folder.id);
       });
     }
 
-    li.appendChild(button);
+    li.appendChild(row);
     folderList.appendChild(li);
   });
 }
@@ -216,7 +235,18 @@ function renderMedia() {
     type.className = 'media-type';
     type.textContent = item.type;
 
-    li.append(open, type);
+    const actions = document.createElement('div');
+    actions.className = 'media-actions';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'danger-btn';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', () => deleteMedia(item.id));
+
+    actions.appendChild(removeBtn);
+
+    li.append(open, type, actions);
     mediaGrid.appendChild(li);
   });
 }
@@ -228,4 +258,5 @@ function render() {
   renderMedia();
 }
 
-render();
+loadLibrary();
+setInterval(loadLibrary, 5000);
