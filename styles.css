@@ -261,3 +261,18 @@ button:hover {
   font-size: 0.8rem;
   margin-top: 0.25rem;
 }
+
+
+.arrange-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.media-item {
+  cursor: grab;
+}
+
+.media-item:active {
+  cursor: grabbing;
+}
