@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Browser</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Video Browser</h1>
+      <div class="header-actions">
+        <label class="import-btn" for="mediaInput">Import Media</label>
+        <input id="mediaInput" type="file" accept="video/*,audio/*,.mp4,.mp3,.wav,.m4a,.webm,.ogg,.mov" multiple />
+      </div>
+    </header>
+
+    <main>
+      <aside>
+        <div class="folder-toolbar">
+          <h2>Folders</h2>
+          <button id="createFolderBtn" type="button">+ New</button>
+        </div>
+        <ul id="folderList"></ul>
+      </aside>
+
+      <section class="library-panel">
+        <div class="library-header">
+          <h2 id="activeFolderTitle">All Media</h2>
+          <p>Drag items into folders to organize your library.</p>
+        </div>
+        <ul id="mediaGrid" class="media-grid"></ul>
+      </section>
+
+      <section class="player-panel">
+        <h2>Player</h2>
+        <div id="playerWrapper" class="player-wrapper empty">
+          <p>Select a media file to preview it.</p>
+        </div>
+        <div id="nowPlaying" class="now-playing"></div>
+      </section>
+    </main>
+
+    <template id="folderItemTemplate">
+      <li class="folder-item">
+        <button type="button" class="folder-select"></button>
+      </li>
+    </template>
+
+    <template id="mediaItemTemplate">
+      <li class="media-item" draggable="true">
+        <button type="button" class="media-open"></button>
+        <span class="media-type"></span>
+      </li>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
