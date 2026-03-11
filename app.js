@@ -78,13 +78,18 @@ async function onFolderFormSubmit(event) {
     return;
   }
 
-  const duplicate = state.folders.some((folder) => folder.name.toLowerCase() === name.toLowerCase());
+  const parentId = state.activeFolderId === 'all' ? '' : state.activeFolderId;
+  const duplicate = state.folders.some((folder) => {
+    if (!folder.relPath) return false;
+    const folderParent = folder.relPath.includes('/') ? folder.relPath.slice(0, folder.relPath.lastIndexOf('/')) : '';
+    return folderParent === parentId && folder.name.toLowerCase() === name.toLowerCase();
+  });
   if (duplicate) {
-    setFolderError('A folder with this name already exists.');
+    setFolderError('A folder with this name already exists in this location.');
     return;
   }
 
-  await window.libraryApi.createFolder(name);
+  await window.libraryApi.createFolder(parentId, name);
   closeFolderModal();
   await loadLibrary();
 }
@@ -109,7 +114,7 @@ function mediaForCurrentFolder() {
   if (state.activeFolderId === 'all') {
     return state.mediaItems;
   }
-  return state.mediaItems.filter((item) => item.folderId === state.activeFolderId);
+  return state.mediaItems.filter((item) => item.folderId === state.activeFolderId || item.folderId.startsWith(`${state.activeFolderId}/`));
 }
 
 function openPlayer(itemId) {
@@ -169,10 +174,13 @@ function renderFolders() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'folder-select';
+    const depth = folder.relPath ? folder.relPath.split('/').length - 1 : 0;
+    button.style.paddingLeft = `${0.8 + (depth * 1.0)}rem`;
     const folderCount = folder.id === 'all'
       ? state.mediaItems.length
-      : state.mediaItems.filter((item) => item.folderId === folder.id).length;
-    button.textContent = `${folder.name} (${folderCount})`;
+      : state.mediaItems.filter((item) => item.folderId === folder.id || item.folderId.startsWith(`${folder.id}/`)).length;
+    const folderLabel = folder.relPath ? folder.relPath : folder.name;
+    button.textContent = `${folderLabel} (${folderCount})`;
     button.addEventListener('click', () => selectFolder(folder.id));
 
     row.appendChild(button);
