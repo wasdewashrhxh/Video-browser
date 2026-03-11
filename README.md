@@ -11,6 +11,7 @@ Your media now persists on disk.
 - Imported files are copied into the selected library folder.
 - Removing media/folders in the app removes them from disk.
 - You can create folders inside folders, and selecting a parent folder shows media from its subfolders.
+- You can drag media in a folder to set a custom order for that folder.
 - If you add/remove folders or media directly in `Documents/VideoBrowserLibrary`, the app will pick up changes after refresh (or automatically within a few seconds).
 
 ## Development run
