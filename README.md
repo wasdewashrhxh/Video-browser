@@ -2,17 +2,15 @@
 
 A local-first desktop app for importing and organizing media files (video/audio) into folders with a graphical interface.
 
-## What changed
+## Persistent library behavior
 
-This project now runs as an **Electron desktop application** so you can run it locally without internet access.
+Your media now persists on disk.
 
-## Features
-
-- Import multiple files (`mp4`, `mp3`, and other browser-supported audio/video formats).
-- Create folders and organize media with drag-and-drop.
-- Browse media by folder.
-- Preview selected media in the built-in player.
-- Run fully offline once installed.
+- App library location: `Documents/VideoBrowserLibrary`
+- Every folder you create in the app is created on disk inside that library path.
+- Imported files are copied into the selected library folder.
+- Removing media/folders in the app removes them from disk.
+- If you add/remove folders or media directly in `Documents/VideoBrowserLibrary`, the app will pick up changes after refresh (or automatically within a few seconds).
 
 ## Development run
 
@@ -40,8 +38,3 @@ Output will be created in:
 ```bash
 npm run dist
 ```
-
-## Notes
-
-- Imported media is loaded from local files into memory for playback during the current session.
-- No network service or backend is required.
