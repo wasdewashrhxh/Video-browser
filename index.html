@@ -10,8 +10,9 @@
     <header>
       <h1>Video Browser</h1>
       <div class="header-actions">
-        <label class="import-btn" for="mediaInput">Import Media</label>
-        <input id="mediaInput" type="file" accept="video/*,audio/*,.mp4,.mp3,.wav,.m4a,.webm,.ogg,.mov" multiple />
+        <button id="importBtn" type="button">Import Media</button>
+        <button id="refreshBtn" type="button">Refresh</button>
+        <button id="openLibraryBtn" type="button">Open Library Folder</button>
       </div>
     </header>
 
@@ -26,8 +27,11 @@
 
       <section class="library-panel">
         <div class="library-header">
-          <h2 id="activeFolderTitle">All Media</h2>
-          <p>Drag items into folders to organize your library.</p>
+          <div>
+            <h2 id="activeFolderTitle">All Media</h2>
+            <p id="libraryPathLabel" class="library-path"></p>
+          </div>
+          <p>Edits in your library folder are auto-detected.</p>
         </div>
         <ul id="mediaGrid" class="media-grid"></ul>
       </section>
