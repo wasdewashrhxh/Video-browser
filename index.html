@@ -41,18 +41,21 @@
       </section>
     </main>
 
-    <template id="folderItemTemplate">
-      <li class="folder-item">
-        <button type="button" class="folder-select"></button>
-      </li>
-    </template>
-
-    <template id="mediaItemTemplate">
-      <li class="media-item" draggable="true">
-        <button type="button" class="media-open"></button>
-        <span class="media-type"></span>
-      </li>
-    </template>
+    <div id="folderModal" class="folder-modal hidden" aria-hidden="true">
+      <div class="folder-modal-backdrop" data-close-modal="true"></div>
+      <div class="folder-modal-content" role="dialog" aria-modal="true" aria-labelledby="folderModalTitle">
+        <form id="folderForm">
+          <h3 id="folderModalTitle">Create folder</h3>
+          <label for="folderNameInput">Folder name</label>
+          <input id="folderNameInput" type="text" maxlength="60" required placeholder="e.g. Tutorials" />
+          <p id="folderFormError" class="form-error" hidden></p>
+          <div class="folder-form-actions">
+            <button type="button" id="cancelFolderBtn">Cancel</button>
+            <button type="submit" id="saveFolderBtn">Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <script src="app.js"></script>
   </body>
