@@ -66,7 +66,6 @@ aside,
   font-size: 0.85rem;
 }
 
-.import-btn,
 button {
   border: 1px solid #4b5563;
   border-radius: 8px;
@@ -77,14 +76,9 @@ button {
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 
-.import-btn:hover,
 button:hover {
   border-color: var(--accent);
   background: #0f172a;
-}
-
-#mediaInput {
-  display: none;
 }
 
 #folderList,
@@ -233,4 +227,37 @@ button:hover {
 .form-error {
   color: #fca5a5;
   font-size: 0.85rem;
+}
+
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.folder-row {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.danger-btn {
+  border-color: #7f1d1d;
+  color: #fecaca;
+}
+
+.danger-btn:hover {
+  background: #450a0a;
+  border-color: #b91c1c;
+}
+
+.media-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.library-path {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
 }
