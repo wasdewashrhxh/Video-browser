@@ -14,39 +14,47 @@ const createFolderBtn = document.getElementById('createFolderBtn');
 const activeFolderTitle = document.getElementById('activeFolderTitle');
 const playerWrapper = document.getElementById('playerWrapper');
 const nowPlaying = document.getElementById('nowPlaying');
-const folderDialog = document.getElementById('folderDialog');
+const folderModal = document.getElementById('folderModal');
 const folderForm = document.getElementById('folderForm');
 const folderNameInput = document.getElementById('folderNameInput');
 const folderFormError = document.getElementById('folderFormError');
 const cancelFolderBtn = document.getElementById('cancelFolderBtn');
 
 mediaInput.addEventListener('change', importFiles);
-createFolderBtn.addEventListener('click', showCreateFolderDialog);
+createFolderBtn.addEventListener('click', showCreateFolderModal);
 folderForm.addEventListener('submit', onFolderFormSubmit);
-cancelFolderBtn.addEventListener('click', closeFolderDialog);
+cancelFolderBtn.addEventListener('click', closeFolderModal);
+folderModal.addEventListener('click', (event) => {
+  if (event.target.dataset.closeModal === 'true') {
+    closeFolderModal();
+  }
+});
 
-function showCreateFolderDialog() {
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !folderModal.classList.contains('hidden')) {
+    closeFolderModal();
+  }
+});
+
+function showCreateFolderModal() {
   folderForm.reset();
   setFolderError('');
-  if (typeof folderDialog.showModal === 'function') {
-    folderDialog.showModal();
-  } else {
-    const name = window.prompt('Folder name:');
-    if (name && name.trim()) {
-      addFolder(name.trim());
-    }
-    return;
-  }
+  folderModal.classList.remove('hidden');
+  folderModal.setAttribute('aria-hidden', 'false');
 
   requestAnimationFrame(() => {
     folderNameInput.focus();
   });
 }
 
+function closeFolderModal() {
+  folderModal.classList.add('hidden');
+  folderModal.setAttribute('aria-hidden', 'true');
+}
+
 function onFolderFormSubmit(event) {
   event.preventDefault();
-  const rawName = folderNameInput.value;
-  const name = rawName.trim();
+  const name = folderNameInput.value.trim();
 
   if (!name) {
     setFolderError('Folder name is required.');
@@ -60,7 +68,12 @@ function onFolderFormSubmit(event) {
   }
 
   addFolder(name);
-  closeFolderDialog();
+  closeFolderModal();
+}
+
+function setFolderError(message) {
+  folderFormError.textContent = message;
+  folderFormError.hidden = !message;
 }
 
 function addFolder(name) {
@@ -69,17 +82,6 @@ function addFolder(name) {
     name,
   });
   render();
-}
-
-function closeFolderDialog() {
-  if (folderDialog.open) {
-    folderDialog.close();
-  }
-}
-
-function setFolderError(message) {
-  folderFormError.textContent = message;
-  folderFormError.hidden = !message;
 }
 
 function importFiles(event) {
