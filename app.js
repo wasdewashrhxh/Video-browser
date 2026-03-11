@@ -15,6 +15,7 @@ const activeFolderTitle = document.getElementById('activeFolderTitle');
 const playerWrapper = document.getElementById('playerWrapper');
 const nowPlaying = document.getElementById('nowPlaying');
 const libraryPathLabel = document.getElementById('libraryPathLabel');
+const arrangeHint = document.getElementById('arrangeHint');
 const folderModal = document.getElementById('folderModal');
 const folderForm = document.getElementById('folderForm');
 const folderNameInput = document.getElementById('folderNameInput');
@@ -111,17 +112,18 @@ function selectFolder(folderId) {
 }
 
 function mediaForCurrentFolder() {
-  if (state.activeFolderId === 'all') {
-    return state.mediaItems;
-  }
+  if (state.activeFolderId === 'all') return state.mediaItems;
   return state.mediaItems.filter((item) => item.folderId === state.activeFolderId || item.folderId.startsWith(`${state.activeFolderId}/`));
+}
+
+function mediaForExactActiveFolder() {
+  if (state.activeFolderId === 'all') return [];
+  return state.mediaItems.filter((item) => item.folderId === state.activeFolderId);
 }
 
 function openPlayer(itemId) {
   const selected = state.mediaItems.find((item) => item.id === itemId);
-  if (!selected) {
-    return;
-  }
+  if (!selected) return;
 
   const isVideo = selected.type.startsWith('video/');
   playerWrapper.classList.remove('empty');
@@ -130,9 +132,7 @@ function openPlayer(itemId) {
   const media = document.createElement(isVideo ? 'video' : 'audio');
   media.controls = true;
   media.src = selected.url;
-  if (isVideo) {
-    media.playsInline = true;
-  }
+  if (isVideo) media.playsInline = true;
 
   playerWrapper.appendChild(media);
   nowPlaying.textContent = `Now playing: ${selected.name}`;
@@ -143,12 +143,25 @@ async function moveToFolder(mediaId, folderId) {
   await loadLibrary();
 }
 
+async function reorderInsideActiveFolder(draggedMediaId, targetMediaId) {
+  if (state.activeFolderId === 'all' || !draggedMediaId || draggedMediaId === targetMediaId) return;
+
+  const ordered = mediaForExactActiveFolder().map((item) => item.id);
+  const fromIndex = ordered.indexOf(draggedMediaId);
+  const toIndex = ordered.indexOf(targetMediaId);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+
+  const [moved] = ordered.splice(fromIndex, 1);
+  ordered.splice(toIndex, 0, moved);
+
+  await window.libraryApi.reorderMedia(state.activeFolderId, ordered);
+  await loadLibrary();
+}
+
 async function deleteFolder(folderId) {
-  if (!window.confirm(`Delete folder "${folderId}" and all files in it?`)) {
-    return;
-  }
+  if (!window.confirm(`Delete folder "${folderId}" and all files in it?`)) return;
   await window.libraryApi.deleteFolder(folderId);
-  if (state.activeFolderId === folderId) {
+  if (state.activeFolderId === folderId || state.activeFolderId.startsWith(`${folderId}/`)) {
     state.activeFolderId = 'all';
   }
   await loadLibrary();
@@ -164,9 +177,7 @@ function renderFolders() {
   state.folders.forEach((folder) => {
     const li = document.createElement('li');
     li.className = 'folder-item';
-    if (folder.id === state.activeFolderId) {
-      li.classList.add('active');
-    }
+    if (folder.id === state.activeFolderId) li.classList.add('active');
 
     const row = document.createElement('div');
     row.className = 'folder-row';
@@ -182,7 +193,6 @@ function renderFolders() {
     const folderLabel = folder.relPath ? folder.relPath : folder.name;
     button.textContent = `${folderLabel} (${folderCount})`;
     button.addEventListener('click', () => selectFolder(folder.id));
-
     row.appendChild(button);
 
     if (!['all', 'Uncategorized'].includes(folder.id)) {
@@ -217,6 +227,12 @@ function renderMedia() {
   mediaGrid.innerHTML = '';
   const items = mediaForCurrentFolder();
 
+  if (state.activeFolderId === 'all') {
+    arrangeHint.textContent = 'To custom-order media, open a specific folder and drag items there.';
+  } else {
+    arrangeHint.textContent = 'Tip: drag items up/down in this folder to set custom order.';
+  }
+
   if (items.length === 0) {
     const empty = document.createElement('li');
     empty.textContent = 'No media in this folder yet.';
@@ -231,6 +247,21 @@ function renderMedia() {
     li.draggable = true;
     li.addEventListener('dragstart', (event) => {
       event.dataTransfer.setData('text/plain', item.id);
+      event.dataTransfer.setData('application/x-reorder-media-id', item.id);
+    });
+
+    li.addEventListener('dragover', (event) => {
+      if (state.activeFolderId !== 'all' && item.folderId === state.activeFolderId) {
+        event.preventDefault();
+      }
+    });
+
+    li.addEventListener('drop', async (event) => {
+      const draggedId = event.dataTransfer.getData('application/x-reorder-media-id');
+      if (state.activeFolderId !== 'all' && item.folderId === state.activeFolderId && draggedId) {
+        event.preventDefault();
+        await reorderInsideActiveFolder(draggedId, item.id);
+      }
     });
 
     const open = document.createElement('button');
@@ -253,7 +284,6 @@ function renderMedia() {
     removeBtn.addEventListener('click', () => deleteMedia(item.id));
 
     actions.appendChild(removeBtn);
-
     li.append(open, type, actions);
     mediaGrid.appendChild(li);
   });
