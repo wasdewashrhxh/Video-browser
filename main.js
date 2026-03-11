@@ -7,6 +7,7 @@ const MEDIA_EXTENSIONS = new Set([
   '.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi', '.wmv',
   '.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac',
 ]);
+const ORDER_FILE = '.videobrowser-order.json';
 
 function getLibraryRoot() {
   return path.join(app.getPath('documents'), 'VideoBrowserLibrary');
@@ -36,19 +37,48 @@ function extensionToType(ext) {
   return video.has(ext) ? `video/${ext.slice(1)}` : `audio/${ext.slice(1)}`;
 }
 
-async function collectFoldersAndMedia(root, currentPath = '', folders = [], mediaItems = []) {
+async function readOrderMap(root) {
+  const file = path.join(root, ORDER_FILE);
+  try {
+    const raw = await fs.readFile(file, 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeOrderMap(root, orderMap) {
+  const file = path.join(root, ORDER_FILE);
+  await fs.writeFile(file, JSON.stringify(orderMap, null, 2), 'utf8');
+}
+
+function sortMediaInFolder(folderItems, folderId, orderMap) {
+  const preferred = Array.isArray(orderMap[folderId]) ? orderMap[folderId] : [];
+  const rank = new Map(preferred.map((item, idx) => [item, idx]));
+  return folderItems.sort((a, b) => {
+    const aRank = rank.has(a.path) ? rank.get(a.path) : Number.MAX_SAFE_INTEGER;
+    const bRank = rank.has(b.path) ? rank.get(b.path) : Number.MAX_SAFE_INTEGER;
+    if (aRank !== bRank) return aRank - bRank;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+async function collectFoldersAndMedia(root, orderMap, currentPath = '', folders = [], mediaItems = []) {
   const dirPath = currentPath ? path.join(root, currentPath) : root;
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+  const folderItems = [];
 
   for (const entry of entries) {
     if (entry.isDirectory()) {
       const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
       folders.push({ id: relPath, name: entry.name, relPath });
-      await collectFoldersAndMedia(root, relPath, folders, mediaItems);
+      await collectFoldersAndMedia(root, orderMap, relPath, folders, mediaItems);
       continue;
     }
 
-    if (!entry.isFile()) {
+    if (!entry.isFile() || entry.name === ORDER_FILE) {
       continue;
     }
 
@@ -59,7 +89,7 @@ async function collectFoldersAndMedia(root, currentPath = '', folders = [], medi
 
     const folderId = currentPath || 'Uncategorized';
     const fullPath = path.join(dirPath, entry.name);
-    mediaItems.push({
+    folderItems.push({
       id: fullPath,
       name: entry.name,
       folderId,
@@ -68,15 +98,17 @@ async function collectFoldersAndMedia(root, currentPath = '', folders = [], medi
       type: extensionToType(ext),
     });
   }
+
+  mediaItems.push(...sortMediaInFolder(folderItems, currentPath || 'Uncategorized', orderMap));
 }
 
 async function scanLibrary() {
   const root = await ensureLibrary();
   const folders = [];
   const mediaItems = [];
+  const orderMap = await readOrderMap(root);
 
-  await collectFoldersAndMedia(root, '', folders, mediaItems);
-
+  await collectFoldersAndMedia(root, orderMap, '', folders, mediaItems);
   folders.sort((a, b) => a.relPath.localeCompare(b.relPath));
 
   return {
@@ -110,12 +142,18 @@ async function copyFilesIntoFolder(filePaths, folderId) {
 
   for (const src of filePaths) {
     const ext = path.extname(src).toLowerCase();
-    if (!MEDIA_EXTENSIONS.has(ext)) {
-      continue;
-    }
+    if (!MEDIA_EXTENSIONS.has(ext)) continue;
     const destination = await uniquePath(targetDir, path.basename(src));
     await fs.copyFile(src, destination);
   }
+}
+
+async function updateFolderOrder(folderId, orderedMediaPaths) {
+  const root = await ensureLibrary();
+  const orderMap = await readOrderMap(root);
+  orderMap[folderId] = orderedMediaPaths;
+  await writeOrderMap(root, orderMap);
+  return scanLibrary();
 }
 
 function registerIpcHandlers() {
@@ -124,9 +162,7 @@ function registerIpcHandlers() {
   ipcMain.handle('library:create-folder', async (_event, parentFolderId, name) => {
     const root = await ensureLibrary();
     const safeName = sanitizeSegment(name);
-    if (!safeName || safeName.toLowerCase() === 'all') {
-      throw new Error('Invalid folder name.');
-    }
+    if (!safeName || safeName.toLowerCase() === 'all') throw new Error('Invalid folder name.');
 
     const safeParent = parentFolderId && parentFolderId !== 'all' ? sanitizeRelativePath(parentFolderId) : '';
     const newFolderPath = safeParent ? `${safeParent}/${safeName}` : safeName;
@@ -135,9 +171,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('library:delete-folder', async (_event, folderId) => {
-    if (folderId === 'all' || folderId === 'Uncategorized') {
-      throw new Error('Cannot delete this folder.');
-    }
+    if (folderId === 'all' || folderId === 'Uncategorized') throw new Error('Cannot delete this folder.');
     const root = await ensureLibrary();
     const safeFolder = sanitizeRelativePath(folderId);
     await fs.rm(path.join(root, safeFolder), { recursive: true, force: true });
@@ -159,6 +193,10 @@ function registerIpcHandlers() {
     return scanLibrary();
   });
 
+  ipcMain.handle('library:reorder-media', async (_event, folderId, orderedMediaPaths) => {
+    return updateFolderOrder(folderId, orderedMediaPaths);
+  });
+
   ipcMain.handle('library:import-media', async (_event, targetFolderId) => {
     const result = await dialog.showOpenDialog({
       title: 'Import media files',
@@ -166,9 +204,7 @@ function registerIpcHandlers() {
       filters: [{ name: 'Media', extensions: Array.from(MEDIA_EXTENSIONS).map((ext) => ext.slice(1)) }],
     });
 
-    if (result.canceled || result.filePaths.length === 0) {
-      return scanLibrary();
-    }
+    if (result.canceled || result.filePaths.length === 0) return scanLibrary();
 
     await copyFilesIntoFolder(result.filePaths, targetFolderId === 'all' ? 'Uncategorized' : targetFolderId);
     return scanLibrary();
