@@ -177,3 +177,48 @@ button:hover {
     height: auto;
   }
 }
+
+
+.folder-dialog {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #0b1220;
+  color: var(--text);
+  width: min(92vw, 380px);
+  padding: 0;
+}
+
+.folder-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+#folderForm {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem;
+}
+
+#folderForm h3 {
+  margin: 0;
+}
+
+#folderForm input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  background: #111827;
+  color: var(--text);
+}
+
+#folderForm menu {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin: 0.3rem 0 0;
+  padding: 0;
+}
+
+.form-error {
+  color: #fca5a5;
+  font-size: 0.85rem;
+}
