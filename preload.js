@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('libraryApi', {
   deleteFolder: (folderId) => ipcRenderer.invoke('library:delete-folder', folderId),
   deleteMedia: (mediaPath) => ipcRenderer.invoke('library:delete-media', mediaPath),
   moveMedia: (mediaPath, targetFolderId) => ipcRenderer.invoke('library:move-media', mediaPath, targetFolderId),
+  reorderMedia: (folderId, orderedMediaPaths) => ipcRenderer.invoke('library:reorder-media', folderId, orderedMediaPaths),
   openLibraryFolder: () => ipcRenderer.invoke('library:open-folder'),
 });
