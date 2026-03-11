@@ -178,24 +178,37 @@ button:hover {
   }
 }
 
+.folder-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
 
-.folder-dialog {
+.folder-modal.hidden {
+  display: none;
+}
+
+.folder-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.folder-modal-content {
+  position: relative;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #0b1220;
   color: var(--text);
   width: min(92vw, 380px);
-  padding: 0;
-}
-
-.folder-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
 }
 
 #folderForm {
   display: grid;
   gap: 0.7rem;
-  padding: 1rem;
 }
 
 #folderForm h3 {
@@ -210,12 +223,11 @@ button:hover {
   color: var(--text);
 }
 
-#folderForm menu {
+.folder-form-actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.6rem;
-  margin: 0.3rem 0 0;
-  padding: 0;
+  margin-top: 0.25rem;
 }
 
 .form-error {
