@@ -12,8 +12,16 @@ function getLibraryRoot() {
   return path.join(app.getPath('documents'), 'VideoBrowserLibrary');
 }
 
-function sanitizeName(name) {
+function sanitizeSegment(name) {
   return name.trim().replace(/[\\/:*?"<>|]/g, '_');
+}
+
+function sanitizeRelativePath(relPath) {
+  return relPath
+    .split('/')
+    .map((segment) => sanitizeSegment(segment))
+    .filter(Boolean)
+    .join('/');
 }
 
 async function ensureLibrary() {
@@ -28,41 +36,52 @@ function extensionToType(ext) {
   return video.has(ext) ? `video/${ext.slice(1)}` : `audio/${ext.slice(1)}`;
 }
 
-async function scanLibrary() {
-  const root = await ensureLibrary();
-  const entries = await fs.readdir(root, { withFileTypes: true });
-  const folders = entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({
-      id: entry.name,
-      name: entry.name,
-      dirPath: path.join(root, entry.name),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+async function collectFoldersAndMedia(root, currentPath = '', folders = [], mediaItems = []) {
+  const dirPath = currentPath ? path.join(root, currentPath) : root;
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
-  const mediaItems = [];
-  for (const folder of folders) {
-    const files = await fs.readdir(folder.dirPath, { withFileTypes: true });
-    files.filter((f) => f.isFile()).forEach((file) => {
-      const fullPath = path.join(folder.dirPath, file.name);
-      const ext = path.extname(file.name).toLowerCase();
-      if (!MEDIA_EXTENSIONS.has(ext)) {
-        return;
-      }
-      mediaItems.push({
-        id: fullPath,
-        name: file.name,
-        folderId: folder.id,
-        path: fullPath,
-        url: pathToFileURL(fullPath).href,
-        type: extensionToType(ext),
-      });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+      folders.push({ id: relPath, name: entry.name, relPath });
+      await collectFoldersAndMedia(root, relPath, folders, mediaItems);
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    const ext = path.extname(entry.name).toLowerCase();
+    if (!MEDIA_EXTENSIONS.has(ext)) {
+      continue;
+    }
+
+    const folderId = currentPath || 'Uncategorized';
+    const fullPath = path.join(dirPath, entry.name);
+    mediaItems.push({
+      id: fullPath,
+      name: entry.name,
+      folderId,
+      path: fullPath,
+      url: pathToFileURL(fullPath).href,
+      type: extensionToType(ext),
     });
   }
+}
+
+async function scanLibrary() {
+  const root = await ensureLibrary();
+  const folders = [];
+  const mediaItems = [];
+
+  await collectFoldersAndMedia(root, '', folders, mediaItems);
+
+  folders.sort((a, b) => a.relPath.localeCompare(b.relPath));
 
   return {
     libraryPath: root,
-    folders: [{ id: 'all', name: 'All Media' }, ...folders.map(({ id, name }) => ({ id, name }))],
+    folders: [{ id: 'all', name: 'All Media' }, ...folders.map(({ id, name, relPath }) => ({ id, name, relPath }))],
     mediaItems,
   };
 }
@@ -85,8 +104,8 @@ async function uniquePath(targetDir, baseName) {
 
 async function copyFilesIntoFolder(filePaths, folderId) {
   const root = await ensureLibrary();
-  const folderName = sanitizeName(folderId) || 'Uncategorized';
-  const targetDir = path.join(root, folderName);
+  const safeFolderPath = sanitizeRelativePath(folderId) || 'Uncategorized';
+  const targetDir = path.join(root, safeFolderPath);
   await fs.mkdir(targetDir, { recursive: true });
 
   for (const src of filePaths) {
@@ -102,13 +121,16 @@ async function copyFilesIntoFolder(filePaths, folderId) {
 function registerIpcHandlers() {
   ipcMain.handle('library:scan', async () => scanLibrary());
 
-  ipcMain.handle('library:create-folder', async (_event, name) => {
+  ipcMain.handle('library:create-folder', async (_event, parentFolderId, name) => {
     const root = await ensureLibrary();
-    const safeName = sanitizeName(name);
+    const safeName = sanitizeSegment(name);
     if (!safeName || safeName.toLowerCase() === 'all') {
       throw new Error('Invalid folder name.');
     }
-    await fs.mkdir(path.join(root, safeName), { recursive: true });
+
+    const safeParent = parentFolderId && parentFolderId !== 'all' ? sanitizeRelativePath(parentFolderId) : '';
+    const newFolderPath = safeParent ? `${safeParent}/${safeName}` : safeName;
+    await fs.mkdir(path.join(root, newFolderPath), { recursive: true });
     return scanLibrary();
   });
 
@@ -117,7 +139,8 @@ function registerIpcHandlers() {
       throw new Error('Cannot delete this folder.');
     }
     const root = await ensureLibrary();
-    await fs.rm(path.join(root, folderId), { recursive: true, force: true });
+    const safeFolder = sanitizeRelativePath(folderId);
+    await fs.rm(path.join(root, safeFolder), { recursive: true, force: true });
     return scanLibrary();
   });
 
@@ -128,7 +151,8 @@ function registerIpcHandlers() {
 
   ipcMain.handle('library:move-media', async (_event, mediaPath, targetFolderId) => {
     const root = await ensureLibrary();
-    const targetDir = path.join(root, sanitizeName(targetFolderId));
+    const safeTarget = sanitizeRelativePath(targetFolderId);
+    const targetDir = path.join(root, safeTarget || 'Uncategorized');
     await fs.mkdir(targetDir, { recursive: true });
     const destination = await uniquePath(targetDir, path.basename(mediaPath));
     await fs.rename(mediaPath, destination);
@@ -139,9 +163,7 @@ function registerIpcHandlers() {
     const result = await dialog.showOpenDialog({
       title: 'Import media files',
       properties: ['openFile', 'multiSelections'],
-      filters: [
-        { name: 'Media', extensions: Array.from(MEDIA_EXTENSIONS).map((ext) => ext.slice(1)) },
-      ],
+      filters: [{ name: 'Media', extensions: Array.from(MEDIA_EXTENSIONS).map((ext) => ext.slice(1)) }],
     });
 
     if (result.canceled || result.filePaths.length === 0) {
@@ -176,14 +198,8 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'index.html'));
 
   const menu = Menu.buildFromTemplate([
-    {
-      label: 'File',
-      submenu: [{ role: 'reload' }, { type: 'separator' }, { role: 'quit' }],
-    },
-    {
-      label: 'View',
-      submenu: [{ role: 'togglefullscreen' }, { role: 'toggledevtools' }],
-    },
+    { label: 'File', submenu: [{ role: 'reload' }, { type: 'separator' }, { role: 'quit' }] },
+    { label: 'View', submenu: [{ role: 'togglefullscreen' }, { role: 'toggledevtools' }] },
   ]);
   Menu.setApplicationMenu(menu);
 }
