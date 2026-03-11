@@ -1,0 +1,41 @@
+{
+  "name": "video-browser",
+  "version": "1.1.0",
+  "description": "Offline desktop video/audio browser with folder organization",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.local.videobrowser",
+    "productName": "Video Browser",
+    "files": [
+      "index.html",
+      "styles.css",
+      "app.js",
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  }
+}
